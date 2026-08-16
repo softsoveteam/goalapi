@@ -14,3 +14,16 @@ uvicorn app.main:app --reload --port 8000
 Default owner login: `admin@softsove.com` / `admin123`
 
 API docs: http://localhost:8000/docs
+
+## PostgreSQL (aaPanel)
+
+1. In aaPanel install **PostgreSQL** and create a database + user.
+2. Copy `.env.example` to `.env` and set `DATABASE_URL`:
+
+```env
+DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@127.0.0.1:5432/DBNAME
+```
+
+If the password has special characters (`@`, `#`, `%`, `/`), URL-encode them.
+
+Tables are created automatically on first API start.
