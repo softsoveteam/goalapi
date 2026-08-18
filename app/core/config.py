@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = ""
+    care_tab_password: str = "@1402"
+    interakt_template_care: str = "care_note"
 
     @property
     def cors_origin_list(self):

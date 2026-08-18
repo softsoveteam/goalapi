@@ -6,10 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.config import settings
-from app.db.models import JobRun, RecurringRule, Task, TaskItem
+from app.db.models import CareReminder, JobRun, RecurringRule, Task, TaskItem
 from app.db.session import SessionLocal
-from app.services.ist import as_utc_naive, compute_next_run, end_of_ist_day, now_ist, to_ist
-from app.services.notify import clip, send_task_assigned, send_task_reminder
+from app.services.ist import as_utc_naive, compute_next_run, compute_period_next_run, end_of_ist_day, now_ist, to_ist
+from app.services.notify import clip, send_care_note, send_task_assigned, send_task_reminder
+from app.services.care_messages import pick_message
 from app.services import interakt
 
 
@@ -215,5 +216,46 @@ def run_recurring() -> dict:
             send_task_assigned(loaded)
             created += 1
         return {"ok": True, "job": "recurring", "created": created}
+    finally:
+        db.close()
+
+
+def _care_next(row: CareReminder) -> datetime:
+    person = row.person
+    if row.interval == "period_window":
+        start = person.last_period_start
+        if isinstance(start, datetime):
+            start = start.date()
+        if not start:
+            return as_utc_naive(compute_next_run("daily", row.send_time, after=now_ist()))
+        return as_utc_naive(compute_period_next_run(start, person.cycle_days or 28, row.send_time, after=now_ist()))
+    return as_utc_naive(
+        compute_next_run(row.interval, row.send_time, row.weekday, row.day_of_month, after=now_ist())
+    )
+
+
+def run_care() -> dict:
+    db = SessionLocal()
+    sent = 0
+    try:
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        rows = (
+            db.query(CareReminder)
+            .options(joinedload(CareReminder.person))
+            .filter(CareReminder.is_active.is_(True), CareReminder.next_run_at <= now_naive)
+            .all()
+        )
+        for row in rows:
+            row.next_run_at = _care_next(row)
+            db.commit()
+            person = row.person
+            if not person or not person.phone:
+                continue
+            message = pick_message(row.niche, person.id, now_ist().date(), row.custom_text)
+            send_care_note(person.phone, person.name, message, row.niche, row.send_time)
+            row.last_sent_at = datetime.now(timezone.utc)
+            db.commit()
+            sent += 1
+        return {"ok": True, "job": "care", "sent": sent}
     finally:
         db.close()

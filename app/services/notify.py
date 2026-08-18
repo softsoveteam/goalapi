@@ -45,6 +45,19 @@ def send_task_assigned(task: Task) -> None:
     )
 
 
+def send_care_note(phone: str, name: str, message: str, niche: str = "take_care", send_time: str = "") -> None:
+    from app.services.care_messages import NICHE_LABELS
+
+    first = (name or "there").split()[0]
+    kind = NICHE_LABELS.get(niche, "Reminder")
+    when = (send_time or "scheduled time") + " IST"
+    interakt.send_template(
+        phone,
+        settings.interakt_template_care,
+        [first, kind, when, clip(message, 400)],
+    )
+
+
 def send_task_reminder(task: Task, template_name: str) -> None:
     assignee = task.assignee
     if not assignee or not assignee.phone:

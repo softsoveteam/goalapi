@@ -85,3 +85,35 @@ def compute_next_run(
 
 def end_of_ist_day(day) -> datetime:
     return datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=IST)
+
+
+def period_window(last_start, cycle_days: int, today):
+    cycle = max(21, min(45, int(cycle_days or 28)))
+    expected = last_start + timedelta(days=cycle)
+    guard = 0
+    while expected + timedelta(days=4) < today and guard < 36:
+        expected = expected + timedelta(days=cycle)
+        guard += 1
+    start = expected - timedelta(days=2)
+    end = expected + timedelta(days=4)
+    if today > end:
+        expected = expected + timedelta(days=cycle)
+        start = expected - timedelta(days=2)
+        end = expected + timedelta(days=4)
+    return start, end, expected
+
+
+def compute_period_next_run(last_start, cycle_days: int, send_time: str, after: Optional[datetime] = None) -> datetime:
+    now = to_ist(after) if after else now_ist()
+    today = now.date()
+    start, end, _expected = period_window(last_start, cycle_days, today)
+    cursor = today
+    if cursor < start:
+        return combine_ist(start, send_time)
+    while cursor <= end:
+        candidate = combine_ist(cursor, send_time)
+        if candidate > now:
+            return candidate
+        cursor = cursor + timedelta(days=1)
+    start2, _end2, _ = period_window(last_start, cycle_days, end + timedelta(days=1))
+    return combine_ist(start2, send_time)

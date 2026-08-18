@@ -212,3 +212,81 @@ class DashboardOut(BaseModel):
     open_goal_count: int
     upcoming_deadlines: List[DashboardTaskOut]
     my_open_tasks: List[DashboardTaskOut]
+
+
+class CareUnlockIn(BaseModel):
+    password: str
+
+
+class CareUnlockOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class CarePersonOut(ORMModel):
+    id: int
+    name: str
+    phone: str
+    relation: str
+    notes: str
+    last_period_start: Optional[datetime] = None
+    cycle_days: int
+    is_active: bool
+    next_period_start: Optional[datetime] = None
+
+
+class CarePersonCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    phone: str = Field(min_length=10, max_length=20)
+    relation: str = "custom"
+    notes: str = ""
+    last_period_start: Optional[datetime] = None
+    cycle_days: int = Field(default=28, ge=21, le=45)
+
+
+class CarePersonUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    phone: Optional[str] = Field(default=None, min_length=10, max_length=20)
+    relation: Optional[str] = None
+    notes: Optional[str] = None
+    last_period_start: Optional[datetime] = None
+    cycle_days: Optional[int] = Field(default=None, ge=21, le=45)
+    period_started_today: Optional[bool] = None
+
+
+class CareReminderOut(ORMModel):
+    id: int
+    person_id: int
+    niche: str
+    interval: str
+    send_time: str
+    weekday: Optional[int] = None
+    day_of_month: Optional[int] = None
+    custom_text: str = ""
+    next_run_at: datetime
+    last_sent_at: Optional[datetime] = None
+    is_active: bool
+    preview: str = ""
+    person: Optional[CarePersonOut] = None
+
+
+class CareReminderCreate(BaseModel):
+    person_id: int
+    niche: str = "take_care"
+    interval: str = "daily"
+    send_time: str = "20:00"
+    weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    day_of_month: Optional[int] = Field(default=None, ge=1, le=31)
+    custom_text: str = ""
+
+
+class CareReminderUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    send_time: Optional[str] = None
+    custom_text: Optional[str] = None
+
+
+class CareNicheOut(BaseModel):
+    key: str
+    label: str
+    preview: str

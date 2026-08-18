@@ -33,6 +33,12 @@ def start_scheduler() -> None:
         id="recurring",
         replace_existing=True,
     )
+    scheduler.add_job(
+        jobs.run_care,
+        IntervalTrigger(seconds=60),
+        id="care",
+        replace_existing=True,
+    )
     scheduler.start()
     _scheduler = scheduler
     print("[scheduler] started IST 08:45 reminders, 19:00 digest, recurring every 60s")

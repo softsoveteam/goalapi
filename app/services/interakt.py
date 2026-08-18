@@ -42,6 +42,14 @@ from app.core.config import settings
 # Still pending:
 # {{3}}
 #
+# care_note — Utility, en, 4 body vars, no button.
+# Hello {{1}},
+# This is an automated reminder from your scheduled care list.
+# Reminder type: {{2}}
+# Time: {{3}}
+# Note: {{4}}
+# This message is sent only because a reminder was configured for you. No reply is required. If this does not apply, you may ignore it.
+#
 # task_completed — 3 body vars, no button
 # Task completed.
 # Task: {{1}}

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.migrate import migrate
-from app.routers import auth, dashboard, goals, jobs, recurring, tasks, teams
+from app.routers import auth, care, dashboard, goals, jobs, recurring, tasks, teams
 from app.services.scheduler import start_scheduler
 
 migrate()
@@ -23,6 +23,7 @@ app.include_router(teams.router)
 app.include_router(goals.router)
 app.include_router(tasks.router)
 app.include_router(recurring.router)
+app.include_router(care.router)
 app.include_router(jobs.router)
 app.include_router(dashboard.router)
 

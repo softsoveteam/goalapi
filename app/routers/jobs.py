@@ -16,4 +16,6 @@ def run_job(job: str = Query(...), token: str = Query(...)):
         return jobs.run_digest()
     if job == "recurring":
         return jobs.run_recurring()
+    if job == "care":
+        return jobs.run_care()
     raise HTTPException(status_code=400, detail="Unknown job")

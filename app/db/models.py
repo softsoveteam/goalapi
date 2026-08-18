@@ -172,3 +172,45 @@ class OtpCode(Base):
     purpose: Mapped[str] = mapped_column(String(32), default="login")
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class CarePerson(Base):
+    __tablename__ = "care_people"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    phone: Mapped[str] = mapped_column(String(32))
+    relation: Mapped[str] = mapped_column(String(40), default="custom")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    last_period_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    cycle_days: Mapped[int] = mapped_column(Integer, default=28)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    reminders: Mapped[List["CareReminder"]] = relationship(
+        back_populates="person",
+        cascade="all, delete-orphan",
+    )
+
+
+class CareReminder(Base):
+    __tablename__ = "care_reminders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    person_id: Mapped[int] = mapped_column(ForeignKey("care_people.id", ondelete="CASCADE"), index=True)
+    niche: Mapped[str] = mapped_column(String(40), default="take_care")
+    interval: Mapped[str] = mapped_column(String(20), default="daily")
+    send_time: Mapped[str] = mapped_column(String(5), default="20:00")
+    weekday: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    day_of_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    custom_text: Mapped[str] = mapped_column(Text, default="")
+    next_run_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    last_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    person: Mapped["CarePerson"] = relationship(back_populates="reminders")
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
