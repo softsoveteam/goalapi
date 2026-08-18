@@ -1,8 +1,8 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_admin
 from app.db.models import User
 from app.db.session import get_db
 
@@ -16,26 +16,13 @@ def get_current_user(
     user_id = decode_access_token(token)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-    user = (
-        db.query(User)
-        .options(joinedload(User.role), joinedload(User.team_memberships))
-        .filter(User.id == int(user_id))
-        .first()
-    )
+    user = db.query(User).filter(User.id == int(user_id)).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive or missing")
     return user
 
 
-def has_permission(user: User, permission: str) -> bool:
-    perms = user.role.permissions or []
-    return permission in perms
-
-
-def require_permission(permission: str):
-    def checker(user: User = Depends(get_current_user)) -> User:
-        if not has_permission(user, permission):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-        return user
-
-    return checker
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    if not is_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user

@@ -6,17 +6,6 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-ALL_PERMISSIONS = [
-    "roles.manage",
-    "users.manage",
-    "teams.manage",
-    "projects.create",
-    "projects.view_all",
-    "tasks.assign",
-    "goals.view",
-    "goals.manage",
-]
-
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -39,3 +28,7 @@ def decode_access_token(token: str) -> Optional[str]:
         return str(subject) if subject else None
     except JWTError:
         return None
+
+
+def is_admin(user) -> bool:
+    return user.kind in ("owner", "manager")

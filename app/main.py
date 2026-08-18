@@ -1,10 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, MetaData
 
 from app.core.config import settings
+from app.db import models  # noqa: F401
 from app.db.seed import seed_defaults
 from app.db.session import Base, SessionLocal, engine
-from app.routers import auth, dashboard, goals, projects, roles, tasks, teams, users
+from app.routers import auth, dashboard, goals, tasks, teams
+
+inspector = inspect(engine)
+tables = set(inspector.get_table_names())
+legacy = bool({"roles", "projects", "team_members", "teams"} & tables)
+kind_missing = False
+if "users" in tables:
+    cols = {col["name"] for col in inspector.get_columns("users")}
+    kind_missing = "kind" not in cols
+if legacy or kind_missing:
+    reflected = MetaData()
+    reflected.reflect(bind=engine)
+    reflected.drop_all(bind=engine)
 
 Base.metadata.create_all(bind=engine)
 with SessionLocal() as db:
@@ -21,12 +35,9 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(roles.router)
-app.include_router(users.router)
 app.include_router(teams.router)
-app.include_router(projects.router)
-app.include_router(tasks.router)
 app.include_router(goals.router)
+app.include_router(tasks.router)
 app.include_router(dashboard.router)
 
 

@@ -11,9 +11,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Default owner login: `admin@softsove.com` / `admin123`
+Default owner login: `admin@softsove.com` / `admin123`  
+Manager: `manager@softsove.com` / `manager123`
 
 API docs: http://localhost:8000/docs
+
+Copy `.env.example` to `.env`. Set `DATABASE_URL`, `APP_PUBLIC_URL`, `ADMIN_WHATSAPP`, Interakt, and SMTP when you have them.
+
+Interakt task template URL button should be: `{APP_PUBLIC_URL}/t/{{1}}`
 
 ## PostgreSQL (aaPanel)
 
