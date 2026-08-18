@@ -5,38 +5,45 @@ import httpx
 from app.core.config import settings
 
 # Interakt / Meta template copy (Utility, language en). Recreate before deploy.
+# Task URL is never in the body — only the Visit website button {{1}} = public_id
+# Button URL: http://task.softsove.com/t/{{1}}
 #
-# task_assigned — 7 body vars + Visit website button {{1}} = public_id
-# Hi {{1}}, you have a new task.
+# task_assigned — 6 body vars + button
+# Hello {{1}},
+# A new task has been assigned to you.
 # Task: {{2}}
 # Priority: {{3}}
 # Details: {{4}}
 # Deadline: {{5}}
-# Time left: {{6}}
-# Open: {{7}}
-# Button URL: http://task.softsove.com/t/{{1}}
+# Time remaining: {{6}}
+# Please review and complete this task on time.
 #
-# task_reminder — 4 body vars + same button
-# Hi {{1}}, this task is still open.
+# task_reminder — 3 body vars + button
+# Hello {{1}},
+# This is a reminder that the following task is still pending.
 # Task: {{2}}
 # Deadline: {{3}}
-# Open: {{4}}
+# Please complete it at the earliest.
 #
-# task_warning — 4 body vars + same button
-# Hi {{1}}, final warning — this task is still pending.
+# task_warning — 3 body vars + button
+# Hello {{1}},
+# Final reminder: the following task is still overdue.
 # Task: {{2}}
 # Deadline: {{3}}
-# Open: {{4}}
+# Please close this task immediately.
 #
 # daily_digest — 3 body vars, no button
-# Daily digest for {{1}}
+# Daily task summary for {{1}}
 # Completed today:
 # {{2}}
 # Still pending:
 # {{3}}
 #
 # task_completed — 3 body vars, no button
-# Task {{1}} was closed by {{2}}. Time taken: {{3}}
+# Task completed.
+# Task: {{1}}
+# Closed by: {{2}}
+# Time taken: {{3}}
 
 
 def split_phone(raw: str) -> Tuple[str, str]:

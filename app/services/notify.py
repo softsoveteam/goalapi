@@ -11,10 +11,6 @@ def clip(value: str, limit: int = 400) -> str:
     return text[: limit - 3] + "..."
 
 
-def task_url(task: Task) -> str:
-    return "{0}/t/{1}".format(settings.app_public_url.rstrip("/"), task.public_id)
-
-
 def priority_label(value: str) -> str:
     return (value or "normal").replace("_", " ").title()
 
@@ -34,7 +30,6 @@ def send_task_assigned(task: Task) -> None:
             clip(task.description or "No description"),
             format_deadline(task.deadline),
             format_remaining(task.deadline),
-            task_url(task),
         ],
         button_suffix=task.public_id,
     )
@@ -51,7 +46,6 @@ def send_task_reminder(task: Task, template_name: str) -> None:
             assignee.name,
             task.title,
             format_deadline(task.deadline),
-            task_url(task),
         ],
         button_suffix=task.public_id,
     )
