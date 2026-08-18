@@ -15,6 +15,16 @@ def priority_label(value: str) -> str:
     return (value or "normal").replace("_", " ").title()
 
 
+def task_button_url(task: Task) -> str:
+    """Full https URL for Interakt CTA: https://api.interakt.ai/cta?redirect={{1}}"""
+    base = (settings.app_public_url or "").rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://") :]
+    elif not base.startswith("https://"):
+        base = "https://{0}".format(base.lstrip("/"))
+    return "{0}/t/{1}".format(base, task.public_id)
+
+
 def send_task_assigned(task: Task) -> None:
     assignee = task.assignee
     if not assignee or not assignee.phone:
@@ -31,7 +41,7 @@ def send_task_assigned(task: Task) -> None:
             format_deadline(task.deadline),
             format_remaining(task.deadline),
         ],
-        button_suffix=task.public_id,
+        button_suffix=task_button_url(task),
     )
 
 
@@ -47,5 +57,5 @@ def send_task_reminder(task: Task, template_name: str) -> None:
             task.title,
             format_deadline(task.deadline),
         ],
-        button_suffix=task.public_id,
+        button_suffix=task_button_url(task),
     )

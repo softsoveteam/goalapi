@@ -5,10 +5,13 @@ import httpx
 from app.core.config import settings
 
 # Interakt / Meta template copy (Utility, language en). Recreate before deploy.
-# Task URL is never in the body — only the Visit website button {{1}} = public_id
-# Button URL: http://task.softsove.com/t/{{1}}
+# Task URL is never in the body. Interakt button must be:
+#   https://api.interakt.ai/cta?redirect={{1}}
+# API sends buttonValues {{1}} as the full https task URL, e.g.
+#   https://task.softsove.com/t/{public_id}
+# Assign template name: teamtask
 #
-# task_assigned — 6 body vars + button
+# teamtask — 6 body vars + View My Task button
 # Hello {{1}},
 # A new task has been assigned to you.
 # Task: {{2}}

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     admin_whatsapp: str = ""
     interakt_api_key: str = ""
-    interakt_template_task: str = "task_assigned"
+    interakt_template_task: str = "teamtask"
     interakt_template_done: str = "task_completed"
     interakt_template_reminder: str = "task_reminder"
     interakt_template_warning: str = "task_warning"
