@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from secrets import randbelow
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -22,7 +23,15 @@ def _hash_code(code: str) -> str:
 
 @router.post("/login", response_model=TokenOut)
 def login(payload: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    try:
+        user = db.query(User).filter(User.email == payload.email.lower()).first()
+    except (ProgrammingError, OperationalError) as exc:
+        db.rollback()
+        print("[auth] login db error: {0}".format(exc))
+        raise HTTPException(
+            status_code=503,
+            detail="Database schema is out of date. On the server run: python -m app.migrate",
+        )
     if not user or not user.password_hash or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not is_admin(user):
