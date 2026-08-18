@@ -6,7 +6,7 @@ from app.db.models import User
 
 
 def seed_defaults(db: Session) -> None:
-    owner = db.query(User).filter(User.email == settings.seed_admin_email).first()
+    owner = db.query(User).filter(User.kind == "owner").first()
     if not owner:
         db.add(
             User(
@@ -18,8 +18,9 @@ def seed_defaults(db: Session) -> None:
                 is_active=True,
             )
         )
+        print("Created first owner: {0}".format(settings.seed_admin_email))
 
-    manager = db.query(User).filter(User.email == settings.seed_manager_email).first()
+    manager = db.query(User).filter(User.kind == "manager").first()
     if not manager:
         db.add(
             User(
@@ -31,5 +32,6 @@ def seed_defaults(db: Session) -> None:
                 is_active=True,
             )
         )
+        print("Created first manager: {0}".format(settings.seed_manager_email))
 
     db.commit()

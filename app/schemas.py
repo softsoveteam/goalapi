@@ -46,6 +46,13 @@ class MeOut(UserOut):
     is_admin: bool = False
 
 
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    email: Optional[EmailStr] = None
+    current_password: str = Field(min_length=1)
+    new_password: Optional[str] = Field(default=None, min_length=8, max_length=128)
+
+
 class EmployeeCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: EmailStr

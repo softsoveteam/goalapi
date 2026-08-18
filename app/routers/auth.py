@@ -7,11 +7,11 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_user
-from app.core.security import create_access_token, is_admin, verify_password
+from app.core.deps import get_current_user, require_admin
+from app.core.security import create_access_token, hash_password, is_admin, verify_password
 from app.db.models import OtpCode, Task, User
 from app.db.session import get_db
-from app.schemas import LoginIn, MeOut, OtpRequestIn, OtpVerifyIn, TokenOut, UserOut
+from app.schemas import LoginIn, MeOut, OtpRequestIn, OtpVerifyIn, ProfileUpdate, TokenOut, UserOut
 from app.services.mailer import send_otp_email
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -92,3 +92,27 @@ def verify_otp(payload: OtpVerifyIn, db: Session = Depends(get_db)):
 def me(user: User = Depends(get_current_user)):
     data = UserOut.model_validate(user)
     return MeOut(**data.model_dump(), is_admin=is_admin(user))
+
+
+@router.patch("/me", response_model=MeOut)
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    if not current.password_hash or not verify_password(payload.current_password, current.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if payload.email:
+        email = payload.email.lower()
+        taken = db.query(User).filter(User.email == email, User.id != current.id).first()
+        if taken:
+            raise HTTPException(status_code=400, detail="That email is already in use")
+        current.email = email
+    if payload.name is not None:
+        current.name = payload.name.strip()
+    if payload.new_password:
+        current.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(current)
+    data = UserOut.model_validate(current)
+    return MeOut(**data.model_dump(), is_admin=is_admin(current))

@@ -47,8 +47,6 @@ def migrate() -> None:
     with SessionLocal() as db:
         seed_defaults(db)
     print("Tables ready: {0}".format(", ".join(sorted(Base.metadata.tables))))
-    print("Owner: admin@softsove.com")
-    print("Manager: manager@softsove.com")
 
 
 if __name__ == "__main__":
