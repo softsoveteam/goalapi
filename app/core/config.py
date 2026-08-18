@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     interakt_template_digest: str = "daily_digest"
     interakt_language: str = "en"
 
-    smtp_host: str = ""
+    smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""

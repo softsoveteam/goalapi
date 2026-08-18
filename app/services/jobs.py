@@ -1,8 +1,9 @@
-import json
+from collections import defaultdict
 from datetime import datetime, timezone
+import json
 
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.config import settings
 from app.db.models import JobRun, RecurringRule, Task, TaskItem
@@ -70,7 +71,7 @@ def run_reminders() -> dict:
         db.close()
 
 
-def _digest_lines(tasks, include_assignee: bool = True, limit: int = 12) -> str:
+def _digest_lines(tasks, include_assignee: bool = False, limit: int = 12) -> str:
     if not tasks:
         return "None"
     lines = []
@@ -88,6 +89,7 @@ def _digest_lines(tasks, include_assignee: bool = True, limit: int = 12) -> str:
 
 def run_digest() -> dict:
     db = SessionLocal()
+    sent = 0
     try:
         if not _claim_job(db, "digest"):
             return {"ok": True, "skipped": True, "job": "digest"}
@@ -102,19 +104,48 @@ def run_digest() -> dict:
         )
         pending = q.filter(Task.is_done.is_(False)).order_by(Task.id.desc()).all()
         date_label = now_ist().strftime("%d %b %Y")
+        grouped = defaultdict(lambda: {"completed": [], "pending": [], "user": None})
+        for task in completed:
+            if not task.assignee or not task.assignee.phone:
+                continue
+            grouped[task.assigned_to]["completed"].append(task)
+            grouped[task.assigned_to]["user"] = task.assignee
+        for task in pending:
+            if not task.assignee or not task.assignee.phone:
+                continue
+            grouped[task.assigned_to]["pending"].append(task)
+            grouped[task.assigned_to]["user"] = task.assignee
+        for row in grouped.values():
+            person = row["user"]
+            if not person or not person.phone:
+                continue
+            if not row["completed"] and not row["pending"]:
+                continue
+            interakt.send_template(
+                person.phone,
+                settings.interakt_template_digest,
+                [
+                    date_label,
+                    _digest_lines(row["completed"]),
+                    _digest_lines(row["pending"]),
+                ],
+            )
+            sent += 1
         if settings.admin_whatsapp:
             interakt.send_template(
                 settings.admin_whatsapp,
                 settings.interakt_template_digest,
                 [
                     date_label,
-                    _digest_lines(completed),
-                    _digest_lines(pending),
+                    _digest_lines(completed, include_assignee=True),
+                    _digest_lines(pending, include_assignee=True),
                 ],
             )
+            sent += 1
         return {
             "ok": True,
             "job": "digest",
+            "sent": sent,
             "completed": len(completed),
             "pending": len(pending),
         }

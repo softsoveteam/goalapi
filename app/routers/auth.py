@@ -56,7 +56,11 @@ def request_otp(payload: OtpRequestIn, db: Session = Depends(get_db)):
     db.query(OtpCode).filter(OtpCode.email == email).delete()
     db.add(OtpCode(email=email, code_hash=_hash_code(code), purpose="login", expires_at=expires))
     db.commit()
-    send_otp_email(email, code)
+    try:
+        send_otp_email(email, code)
+    except Exception as exc:
+        print("[auth] otp email failed: {0}".format(exc))
+        raise HTTPException(status_code=503, detail="Could not send the email code. Check Gmail SMTP settings.")
     return {"ok": True}
 
 

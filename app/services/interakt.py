@@ -35,7 +35,7 @@ from app.core.config import settings
 # Deadline: {{3}}
 # Please close this task immediately.
 #
-# daily_digest — 3 body vars, no button
+# daily_digest — 3 body vars, no button. Sent to each assignee's WhatsApp only.
 # Daily task summary for {{1}}
 # Completed today:
 # {{2}}
