@@ -9,6 +9,10 @@ TASK_COLUMNS = {
     "reminded_at": "reminded_at TIMESTAMP",
     "warned_at": "warned_at TIMESTAMP",
     "recurring_rule_id": "recurring_rule_id INTEGER",
+    "is_archived": "is_archived BOOLEAN DEFAULT 0",
+    "archive_reason": "archive_reason TEXT DEFAULT ''",
+    "archived_at": "archived_at TIMESTAMP",
+    "archived_by": "archived_by INTEGER",
 }
 
 

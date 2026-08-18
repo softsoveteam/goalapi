@@ -30,7 +30,7 @@ def _open_tasks(db: Session):
     return (
         db.query(Task)
         .options(joinedload(Task.assignee))
-        .filter(Task.is_done.is_(False), Task.deadline.isnot(None))
+        .filter(Task.is_done.is_(False), Task.deadline.isnot(None), Task.is_archived.is_(False))
         .all()
     )
 
@@ -94,7 +94,7 @@ def run_digest() -> dict:
         today = now_ist().date()
         start = as_utc_naive(now_ist().replace(hour=0, minute=0, second=0, microsecond=0))
         end = as_utc_naive(end_of_ist_day(today))
-        q = db.query(Task).options(joinedload(Task.assignee))
+        q = db.query(Task).options(joinedload(Task.assignee)).filter(Task.is_archived.is_(False))
         completed = (
             q.filter(Task.is_done.is_(True), Task.closed_at >= start, Task.closed_at <= end)
             .order_by(Task.closed_at.desc())

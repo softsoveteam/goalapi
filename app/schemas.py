@@ -121,9 +121,14 @@ class TaskOut(ORMModel):
     created_at: datetime
     closed_at: Optional[datetime]
     priority: str = "normal"
+    is_archived: bool = False
+    archive_reason: str = ""
+    archived_at: Optional[datetime] = None
+    archived_by: Optional[int] = None
     duration: Optional[str] = None
     assignee: Optional[UserOut] = None
     creator: Optional[UserOut] = None
+    archiver: Optional[UserOut] = None
     items: List[ChecklistItemOut] = []
     files: List[TaskFileOut] = []
 
@@ -134,6 +139,8 @@ class TaskPublicOut(BaseModel):
     description: str
     deadline: Optional[datetime]
     is_done: bool
+    is_archived: bool = False
+    archive_reason: str = ""
     priority: str = "normal"
     assignee_name: str
     assignee_email: EmailStr
@@ -148,6 +155,10 @@ class TaskCreate(BaseModel):
     deadline: Optional[datetime] = None
     priority: str = "normal"
     items: List[str] = []
+
+
+class TaskArchiveIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class RecurringRuleOut(ORMModel):

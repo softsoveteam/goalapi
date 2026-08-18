@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -13,6 +13,7 @@ from app.schemas import (
     ChecklistItemCreate,
     ChecklistItemOut,
     ChecklistItemUpdate,
+    TaskArchiveIn,
     TaskCreate,
     TaskFileOut,
     TaskOut,
@@ -30,9 +31,14 @@ def _query(db: Session):
     return db.query(Task).options(
         joinedload(Task.assignee),
         joinedload(Task.creator),
+        joinedload(Task.archiver),
         selectinload(Task.items),
         selectinload(Task.files),
     )
+
+
+def _is_archived(task: Task) -> bool:
+    return bool(getattr(task, "is_archived", False))
 
 
 def _out(task: Task) -> TaskOut:
@@ -53,9 +59,14 @@ def _out(task: Task) -> TaskOut:
         created_at=task.created_at,
         closed_at=task.closed_at,
         priority=task.priority or "normal",
+        is_archived=_is_archived(task),
+        archive_reason=getattr(task, "archive_reason", "") or "",
+        archived_at=getattr(task, "archived_at", None),
+        archived_by=getattr(task, "archived_by", None),
         duration=duration,
         assignee=UserOut.model_validate(task.assignee) if task.assignee else None,
         creator=UserOut.model_validate(task.creator) if task.creator else None,
+        archiver=UserOut.model_validate(task.archiver) if getattr(task, "archiver", None) else None,
         items=[ChecklistItemOut.model_validate(item) for item in items],
         files=[TaskFileOut.model_validate(item) for item in files],
     )
@@ -80,9 +91,22 @@ def _add_items(db: Session, task_id: int, titles) -> None:
         db.add(TaskItem(task_id=task_id, title=text[:300], sort_order=index, is_done=False))
 
 
+def _guard_active(task: Task) -> None:
+    if _is_archived(task):
+        raise HTTPException(status_code=400, detail="This task is archived")
+
+
 @router.get("", response_model=list)
-def list_tasks(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+def list_tasks(
+    archived: bool = Query(False),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
     q = _query(db).order_by(Task.id.desc())
+    if archived:
+        q = q.filter(Task.is_archived.is_(True))
+    else:
+        q = q.filter((Task.is_archived.is_(False)) | (Task.is_archived.is_(None)))
     if not is_admin(current):
         q = q.filter(Task.assigned_to == current.id)
     return [_out(task) for task in q.all()]
@@ -131,6 +155,8 @@ def public_task(public_id: str, db: Session = Depends(get_db)):
         description=task.description,
         deadline=task.deadline,
         is_done=task.is_done,
+        is_archived=_is_archived(task),
+        archive_reason=getattr(task, "archive_reason", "") or "",
         priority=task.priority or "normal",
         assignee_name=task.assignee.name if task.assignee else "",
         assignee_email=task.assignee.email if task.assignee else "",
@@ -158,6 +184,7 @@ def close_task(task_id: int, db: Session = Depends(get_db), current: User = Depe
     from app.services import interakt
 
     task = _load_or_404(db, task_id, current)
+    _guard_active(task)
     if not is_admin(current) and task.assigned_to != current.id:
         raise HTTPException(status_code=403, detail="Permission denied")
     if task.is_done:
@@ -186,6 +213,7 @@ def add_item(
     current: User = Depends(get_current_user),
 ):
     task = _load_or_404(db, task_id, current)
+    _guard_active(task)
     sort_order = len(task.items or [])
     db.add(TaskItem(task_id=task.id, title=payload.title.strip()[:300], sort_order=sort_order, is_done=False))
     db.commit()
@@ -201,6 +229,7 @@ def update_item(
     current: User = Depends(get_current_user),
 ):
     task = _load_or_404(db, task_id, current)
+    _guard_active(task)
     item = db.query(TaskItem).filter(TaskItem.id == item_id, TaskItem.task_id == task.id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Checklist item not found")
@@ -217,6 +246,7 @@ def upload_task_file(
     current: User = Depends(get_current_user),
 ):
     task = _load_or_404(db, task_id, current)
+    _guard_active(task)
     original, stored, size, content_type = save_upload(task.id, file)
     row = TaskFile(
         task_id=task.id,
@@ -246,3 +276,24 @@ def download_task_file(
     if not path.exists():
         raise HTTPException(status_code=404, detail="File missing on disk")
     return FileResponse(path, filename=row.original_name, media_type=row.content_type)
+
+
+@router.post("/{task_id}/archive", response_model=TaskOut)
+def archive_task(
+    task_id: int,
+    payload: TaskArchiveIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    task = _load_or_404(db, task_id, current)
+    if _is_archived(task):
+        return _out(task)
+    reason = payload.reason.strip()
+    if len(reason) < 3:
+        raise HTTPException(status_code=400, detail="Please enter a reason")
+    task.is_archived = True
+    task.archive_reason = reason
+    task.archived_at = datetime.now(timezone.utc)
+    task.archived_by = current.id
+    db.commit()
+    return _out(_query(db).filter(Task.id == task_id).first())

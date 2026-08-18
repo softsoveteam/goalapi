@@ -86,9 +86,14 @@ class Task(Base):
         ForeignKey("recurring_rules.id", ondelete="SET NULL"),
         nullable=True,
     )
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    archive_reason: Mapped[str] = mapped_column(Text, default="")
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    archived_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     assignee: Mapped["User"] = relationship(foreign_keys=[assigned_to], back_populates="assigned_tasks")
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    archiver: Mapped[Optional["User"]] = relationship(foreign_keys=[archived_by])
     items: Mapped[List["TaskItem"]] = relationship(
         back_populates="task",
         cascade="all, delete-orphan",

@@ -13,6 +13,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("", response_model=DashboardOut)
 def dashboard(db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     q = db.query(Task).options(joinedload(Task.assignee)).order_by(Task.id.desc())
+    q = q.filter((Task.is_archived.is_(False)) | (Task.is_archived.is_(None)))
     if not is_admin(current):
         q = q.filter(Task.assigned_to == current.id)
     tasks = q.all()
