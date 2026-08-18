@@ -4,6 +4,40 @@ import httpx
 
 from app.core.config import settings
 
+# Interakt / Meta template copy (Utility, language en). Recreate before deploy.
+#
+# task_assigned — 7 body vars + Visit website button {{1}} = public_id
+# Hi {{1}}, you have a new task.
+# Task: {{2}}
+# Priority: {{3}}
+# Details: {{4}}
+# Deadline: {{5}}
+# Time left: {{6}}
+# Open: {{7}}
+# Button URL: http://task.softsove.com/t/{{1}}
+#
+# task_reminder — 4 body vars + same button
+# Hi {{1}}, this task is still open.
+# Task: {{2}}
+# Deadline: {{3}}
+# Open: {{4}}
+#
+# task_warning — 4 body vars + same button
+# Hi {{1}}, final warning — this task is still pending.
+# Task: {{2}}
+# Deadline: {{3}}
+# Open: {{4}}
+#
+# daily_digest — 3 body vars, no button
+# Daily digest for {{1}}
+# Completed today:
+# {{2}}
+# Still pending:
+# {{3}}
+#
+# task_completed — 3 body vars, no button
+# Task {{1}} was closed by {{2}}. Time taken: {{3}}
+
 
 def split_phone(raw: str) -> Tuple[str, str]:
     digits = "".join(ch for ch in (raw or "") if ch.isdigit())
@@ -29,7 +63,7 @@ def send_template(phone: str, template_name: str, body_values, button_suffix: st
         "template": {
             "name": template_name,
             "languageCode": settings.interakt_language,
-            "bodyValues": body_values,
+            "bodyValues": [str(value) if value else "-" for value in body_values],
         },
     }
     if button_suffix:

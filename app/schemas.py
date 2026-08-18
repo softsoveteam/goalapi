@@ -4,6 +4,10 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+PRIORITIES = ("urgent", "high", "normal", "low")
+RECURRENCE_INTERVALS = ("daily", "weekly", "monthly")
+
+
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +61,29 @@ class EmployeeUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ChecklistItemOut(ORMModel):
+    id: int
+    title: str
+    is_done: bool
+    sort_order: int
+
+
+class ChecklistItemCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+
+
+class ChecklistItemUpdate(BaseModel):
+    is_done: bool
+
+
+class TaskFileOut(ORMModel):
+    id: int
+    original_name: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+
+
 class GoalOut(ORMModel):
     id: int
     title: str
@@ -65,12 +92,14 @@ class GoalOut(ORMModel):
     created_by: int
     status: str
     creator: Optional[UserOut] = None
+    items: List[ChecklistItemOut] = []
 
 
 class GoalCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     notes: str = ""
     due_date: Optional[datetime] = None
+    items: List[str] = []
 
 
 class GoalUpdate(BaseModel):
@@ -91,9 +120,12 @@ class TaskOut(ORMModel):
     created_by: int
     created_at: datetime
     closed_at: Optional[datetime]
+    priority: str = "normal"
     duration: Optional[str] = None
     assignee: Optional[UserOut] = None
     creator: Optional[UserOut] = None
+    items: List[ChecklistItemOut] = []
+    files: List[TaskFileOut] = []
 
 
 class TaskPublicOut(BaseModel):
@@ -102,8 +134,11 @@ class TaskPublicOut(BaseModel):
     description: str
     deadline: Optional[datetime]
     is_done: bool
+    priority: str = "normal"
     assignee_name: str
     assignee_email: EmailStr
+    items: List[ChecklistItemOut] = []
+    files: List[TaskFileOut] = []
 
 
 class TaskCreate(BaseModel):
@@ -111,6 +146,42 @@ class TaskCreate(BaseModel):
     description: str = ""
     assigned_to: int
     deadline: Optional[datetime] = None
+    priority: str = "normal"
+    items: List[str] = []
+
+
+class RecurringRuleOut(ORMModel):
+    id: int
+    title: str
+    description: str
+    assigned_to: int
+    created_by: int
+    priority: str
+    interval: str
+    send_time: str
+    weekday: Optional[int] = None
+    day_of_month: Optional[int] = None
+    next_run_at: datetime
+    is_active: bool
+    items: List[str] = []
+    assignee: Optional[UserOut] = None
+
+
+class RecurringRuleCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    description: str = ""
+    assigned_to: int
+    priority: str = "normal"
+    interval: str = "daily"
+    send_time: str = "09:00"
+    weekday: Optional[int] = Field(default=None, ge=0, le=6)
+    day_of_month: Optional[int] = Field(default=None, ge=1, le=31)
+    items: List[str] = []
+
+
+class RecurringRuleUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    send_time: Optional[str] = None
 
 
 class DashboardTaskOut(BaseModel):
@@ -120,6 +191,7 @@ class DashboardTaskOut(BaseModel):
     deadline: Optional[datetime]
     is_done: bool
     assignee_name: str
+    priority: str = "normal"
 
 
 class DashboardOut(BaseModel):

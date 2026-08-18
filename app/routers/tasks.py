@@ -1,28 +1,46 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.core.config import settings
 from app.core.deps import get_current_user, require_admin
 from app.core.security import is_admin
-from app.db.models import Task, User
+from app.db.models import Task, TaskFile, TaskItem, User
 from app.db.session import get_db
-from app.schemas import TaskCreate, TaskOut, TaskPublicOut, UserOut
-from app.services import interakt
-from app.services.timefmt import format_deadline, format_duration, format_remaining
+from app.schemas import (
+    PRIORITIES,
+    ChecklistItemCreate,
+    ChecklistItemOut,
+    ChecklistItemUpdate,
+    TaskCreate,
+    TaskFileOut,
+    TaskOut,
+    TaskPublicOut,
+    UserOut,
+)
+from app.services.notify import send_task_assigned
+from app.services.timefmt import format_duration
+from app.services.uploads import file_path, save_upload
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 def _query(db: Session):
-    return db.query(Task).options(joinedload(Task.assignee), joinedload(Task.creator))
+    return db.query(Task).options(
+        joinedload(Task.assignee),
+        joinedload(Task.creator),
+        selectinload(Task.items),
+        selectinload(Task.files),
+    )
 
 
 def _out(task: Task) -> TaskOut:
     duration = None
     if task.closed_at:
         duration = format_duration(task.created_at, task.closed_at)
+    items = sorted(task.items or [], key=lambda item: (item.sort_order, item.id))
+    files = sorted(task.files or [], key=lambda item: item.id, reverse=True)
     return TaskOut(
         id=task.id,
         public_id=task.public_id,
@@ -34,10 +52,32 @@ def _out(task: Task) -> TaskOut:
         created_by=task.created_by,
         created_at=task.created_at,
         closed_at=task.closed_at,
+        priority=task.priority or "normal",
         duration=duration,
         assignee=UserOut.model_validate(task.assignee) if task.assignee else None,
         creator=UserOut.model_validate(task.creator) if task.creator else None,
+        items=[ChecklistItemOut.model_validate(item) for item in items],
+        files=[TaskFileOut.model_validate(item) for item in files],
     )
+
+
+def _can_access(task: Task, current: User) -> bool:
+    return is_admin(current) or task.assigned_to == current.id
+
+
+def _load_or_404(db: Session, task_id: int, current: User) -> Task:
+    task = _query(db).filter(Task.id == task_id).first()
+    if not task or not _can_access(task, current):
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+def _add_items(db: Session, task_id: int, titles) -> None:
+    for index, title in enumerate(titles or []):
+        text = str(title).strip()
+        if not text:
+            continue
+        db.add(TaskItem(task_id=task_id, title=text[:300], sort_order=index, is_done=False))
 
 
 @router.get("", response_model=list)
@@ -57,6 +97,9 @@ def create_task(
     assignee = db.query(User).filter(User.id == payload.assigned_to, User.kind == "employee", User.is_active.is_(True)).first()
     if not assignee:
         raise HTTPException(status_code=400, detail="Select an active employee")
+    priority = (payload.priority or "normal").lower()
+    if priority not in PRIORITIES:
+        raise HTTPException(status_code=400, detail="Priority must be urgent, high, normal, or low")
     task = Task(
         title=payload.title,
         description=payload.description,
@@ -64,19 +107,14 @@ def create_task(
         deadline=payload.deadline,
         created_by=current.id,
         is_done=False,
+        priority=priority,
     )
     db.add(task)
     db.commit()
+    _add_items(db, task.id, payload.items)
+    db.commit()
     loaded = _query(db).filter(Task.id == task.id).first()
-    remaining = format_remaining(loaded.deadline)
-    deadline_text = format_deadline(loaded.deadline)
-    link_suffix = loaded.public_id
-    interakt.send_template(
-        assignee.phone,
-        settings.interakt_template_task,
-        [assignee.name, loaded.title, deadline_text, remaining],
-        button_suffix=link_suffix,
-    )
+    send_task_assigned(loaded)
     return _out(loaded)
 
 
@@ -85,42 +123,41 @@ def public_task(public_id: str, db: Session = Depends(get_db)):
     task = _query(db).filter(Task.public_id == public_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    items = sorted(task.items or [], key=lambda item: (item.sort_order, item.id))
+    files = sorted(task.files or [], key=lambda item: item.id, reverse=True)
     return TaskPublicOut(
         public_id=task.public_id,
         title=task.title,
         description=task.description,
         deadline=task.deadline,
         is_done=task.is_done,
+        priority=task.priority or "normal",
         assignee_name=task.assignee.name if task.assignee else "",
         assignee_email=task.assignee.email if task.assignee else "",
+        items=[ChecklistItemOut.model_validate(item) for item in items],
+        files=[TaskFileOut.model_validate(item) for item in files],
     )
-
-
-@router.get("/{task_id}", response_model=TaskOut)
-def get_task(task_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
-    task = _query(db).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not is_admin(current) and task.assigned_to != current.id:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return _out(task)
 
 
 @router.get("/by-public/{public_id}", response_model=TaskOut)
 def get_by_public(public_id: str, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     task = _query(db).filter(Task.public_id == public_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not is_admin(current) and task.assigned_to != current.id:
+    if not task or not _can_access(task, current):
         raise HTTPException(status_code=404, detail="Task not found")
     return _out(task)
 
 
+@router.get("/{task_id}", response_model=TaskOut)
+def get_task(task_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+    return _out(_load_or_404(db, task_id, current))
+
+
 @router.post("/{task_id}/close", response_model=TaskOut)
 def close_task(task_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
-    task = _query(db).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+    from app.core.config import settings
+    from app.services import interakt
+
+    task = _load_or_404(db, task_id, current)
     if not is_admin(current) and task.assigned_to != current.id:
         raise HTTPException(status_code=403, detail="Permission denied")
     if task.is_done:
@@ -139,3 +176,73 @@ def close_task(task_id: int, db: Session = Depends(get_db), current: User = Depe
             [loaded.title, member_name, duration],
         )
     return _out(loaded)
+
+
+@router.post("/{task_id}/items", response_model=TaskOut)
+def add_item(
+    task_id: int,
+    payload: ChecklistItemCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    task = _load_or_404(db, task_id, current)
+    sort_order = len(task.items or [])
+    db.add(TaskItem(task_id=task.id, title=payload.title.strip()[:300], sort_order=sort_order, is_done=False))
+    db.commit()
+    return _out(_query(db).filter(Task.id == task_id).first())
+
+
+@router.patch("/{task_id}/items/{item_id}", response_model=TaskOut)
+def update_item(
+    task_id: int,
+    item_id: int,
+    payload: ChecklistItemUpdate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    task = _load_or_404(db, task_id, current)
+    item = db.query(TaskItem).filter(TaskItem.id == item_id, TaskItem.task_id == task.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    item.is_done = payload.is_done
+    db.commit()
+    return _out(_query(db).filter(Task.id == task_id).first())
+
+
+@router.post("/{task_id}/files", response_model=TaskFileOut, status_code=201)
+def upload_task_file(
+    task_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    task = _load_or_404(db, task_id, current)
+    original, stored, size, content_type = save_upload(task.id, file)
+    row = TaskFile(
+        task_id=task.id,
+        original_name=original,
+        stored_name=stored,
+        content_type=content_type,
+        size_bytes=size,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return TaskFileOut.model_validate(row)
+
+
+@router.get("/{task_id}/files/{file_id}")
+def download_task_file(
+    task_id: int,
+    file_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    task = _load_or_404(db, task_id, current)
+    row = db.query(TaskFile).filter(TaskFile.id == file_id, TaskFile.task_id == task.id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="File not found")
+    path = file_path(task.id, row.stored_name)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File missing on disk")
+    return FileResponse(path, filename=row.original_name, media_type=row.content_type)

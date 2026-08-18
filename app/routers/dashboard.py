@@ -29,6 +29,7 @@ def dashboard(db: Session = Depends(get_db), current: User = Depends(get_current
             deadline=task.deadline,
             is_done=task.is_done,
             assignee_name=task.assignee.name if task.assignee else "",
+            priority=task.priority or "normal",
         )
 
     employee_count = 0

@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -47,6 +47,23 @@ class Goal(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    items: Mapped[List["GoalItem"]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="GoalItem.sort_order",
+    )
+
+
+class GoalItem(Base):
+    __tablename__ = "goal_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    goal: Mapped["Goal"] = relationship(back_populates="items")
 
 
 class Task(Base):
@@ -62,9 +79,83 @@ class Task(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    reminded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    warned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    recurring_rule_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("recurring_rules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     assignee: Mapped["User"] = relationship(foreign_keys=[assigned_to], back_populates="assigned_tasks")
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+    items: Mapped[List["TaskItem"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskItem.sort_order",
+    )
+    files: Mapped[List["TaskFile"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+    )
+
+
+class TaskItem(Base):
+    __tablename__ = "task_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    task: Mapped["Task"] = relationship(back_populates="items")
+
+
+class TaskFile(Base):
+    __tablename__ = "task_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
+    original_name: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(80), unique=True)
+    content_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    task: Mapped["Task"] = relationship(back_populates="files")
+
+
+class RecurringRule(Base):
+    __tablename__ = "recurring_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    assigned_to: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    interval: Mapped[str] = mapped_column(String(20), default="daily")
+    send_time: Mapped[str] = mapped_column(String(5), default="09:00")
+    weekday: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    day_of_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    checklist_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    assignee: Mapped["User"] = relationship(foreign_keys=[assigned_to])
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
+
+
+class JobRun(Base):
+    __tablename__ = "job_runs"
+    __table_args__ = (UniqueConstraint("job_name", "run_date", name="uq_job_runs_name_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_name: Mapped[str] = mapped_column(String(40))
+    run_date: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class OtpCode(Base):

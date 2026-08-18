@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+UPLOADS_DIR = DATA_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
@@ -15,8 +17,12 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7
     database_url: str = f"sqlite:///{DATA_DIR / 'app.db'}"
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,https://goal.softsove.life,https://goal-v1.softsove.life"
-    app_public_url: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://task.softsove.com,https://task.softsove.com,https://goal.softsove.life,https://goal-v1.softsove.life"
+    app_public_url: str = "http://task.softsove.com"
+    app_timezone: str = "Asia/Kolkata"
+    job_secret: str = ""
+    upload_dir: str = str(UPLOADS_DIR)
+    max_upload_bytes: int = 15 * 1024 * 1024
 
     seed_admin_email: str = "admin@softsove.com"
     seed_admin_password: str = "admin123"
@@ -29,6 +35,9 @@ class Settings(BaseSettings):
     interakt_api_key: str = ""
     interakt_template_task: str = "task_assigned"
     interakt_template_done: str = "task_completed"
+    interakt_template_reminder: str = "task_reminder"
+    interakt_template_warning: str = "task_warning"
+    interakt_template_digest: str = "daily_digest"
     interakt_language: str = "en"
 
     smtp_host: str = ""
