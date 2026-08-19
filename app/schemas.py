@@ -115,6 +115,7 @@ class GoalOut(ORMModel):
     created_by: int
     status: str
     priority: str = "normal"
+    sort_order: int = 0
     creator: Optional[UserOut] = None
     items: List[ChecklistItemOut] = []
     logs: List[GoalLogOut] = []
@@ -124,7 +125,6 @@ class GoalCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     notes: str = ""
     due_date: Optional[datetime] = None
-    priority: str = "normal"
     items: List[str] = []
 
 
@@ -133,7 +133,10 @@ class GoalUpdate(BaseModel):
     notes: Optional[str] = None
     due_date: Optional[datetime] = None
     status: Optional[str] = None
-    priority: Optional[str] = None
+
+
+class GoalReorderIn(BaseModel):
+    ids: List[int]
 
 
 ChecklistItemOut.model_rebuild()

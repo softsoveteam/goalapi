@@ -1,13 +1,13 @@
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.deps import require_admin
 from app.db.models import Goal, GoalItem, GoalLog, User
 from app.db.session import get_db
 from app.schemas import (
-    PRIORITIES,
     ChecklistItemCreate,
     ChecklistItemOut,
     ChecklistItemUpdate,
@@ -15,6 +15,7 @@ from app.schemas import (
     GoalLogCreate,
     GoalLogOut,
     GoalOut,
+    GoalReorderIn,
     GoalUpdate,
     UserOut,
 )
@@ -23,11 +24,23 @@ from app.services.ist import now_ist
 router = APIRouter(prefix="/goals", tags=["goals"])
 
 
-def _priority(value: Optional[str], fallback: str = "normal") -> str:
-    priority = (value or fallback).strip().lower()
-    if priority not in PRIORITIES:
-        raise HTTPException(status_code=400, detail="Priority must be urgent, high, normal, or low")
-    return priority
+def _priority_from_rank(index: int) -> str:
+    if index < 5:
+        return "urgent"
+    if index < 10:
+        return "high"
+    if index < 20:
+        return "normal"
+    return "low"
+
+
+def _apply_ranks(db: Session, ids: List[int]) -> None:
+    for index, goal_id in enumerate(ids):
+        goal = db.query(Goal).filter(Goal.id == goal_id).first()
+        if not goal:
+            continue
+        goal.sort_order = index
+        goal.priority = _priority_from_rank(index)
 
 
 def _query(db: Session):
@@ -71,6 +84,7 @@ def _out(goal: Goal) -> GoalOut:
         created_by=goal.created_by,
         status=goal.status,
         priority=goal.priority or "normal",
+        sort_order=goal.sort_order or 0,
         creator=UserOut.model_validate(goal.creator) if goal.creator else None,
         items=_nest_items(goal.items or []),
         logs=[
@@ -89,7 +103,7 @@ def _out(goal: Goal) -> GoalOut:
 
 @router.get("", response_model=list)
 def list_goals(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    return [_out(goal) for goal in _query(db).order_by(Goal.id.desc()).all()]
+    return [_out(goal) for goal in _query(db).order_by(Goal.sort_order, Goal.id).all()]
 
 
 @router.post("", response_model=GoalOut, status_code=201)
@@ -98,13 +112,16 @@ def create_goal(
     db: Session = Depends(get_db),
     current: User = Depends(require_admin),
 ):
+    max_sort = db.query(func.max(Goal.sort_order)).scalar()
+    sort_order = (max_sort + 1) if max_sort is not None else 0
     goal = Goal(
         title=payload.title,
         notes=payload.notes,
         due_date=payload.due_date,
         created_by=current.id,
         status="open",
-        priority=_priority(payload.priority),
+        sort_order=sort_order,
+        priority=_priority_from_rank(sort_order),
     )
     db.add(goal)
     db.commit()
@@ -135,10 +152,30 @@ def update_goal(
         goal.due_date = payload.due_date
     if payload.status is not None:
         goal.status = payload.status
-    if payload.priority is not None:
-        goal.priority = _priority(payload.priority)
     db.commit()
     return _out(_query(db).filter(Goal.id == goal_id).first())
+
+
+@router.post("/reorder", response_model=list)
+def reorder_goals(
+    payload: GoalReorderIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    ids = [int(goal_id) for goal_id in payload.ids]
+    current_ids = [row.id for row in db.query(Goal.id).order_by(Goal.sort_order, Goal.id).all()]
+    seen = set()
+    ordered: List[int] = []
+    for goal_id in ids:
+        if goal_id in current_ids and goal_id not in seen:
+            ordered.append(goal_id)
+            seen.add(goal_id)
+    for goal_id in current_ids:
+        if goal_id not in seen:
+            ordered.append(goal_id)
+    _apply_ranks(db, ordered)
+    db.commit()
+    return [_out(goal) for goal in _query(db).order_by(Goal.sort_order, Goal.id).all()]
 
 
 @router.post("/{goal_id}/items", response_model=GoalOut)
@@ -225,5 +262,8 @@ def delete_goal(
     goal = _query(db).filter(Goal.id == goal_id).first()
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
+    remaining = [row.id for row in db.query(Goal.id).filter(Goal.id != goal_id).order_by(Goal.sort_order, Goal.id).all()]
     db.delete(goal)
+    db.commit()
+    _apply_ranks(db, remaining)
     db.commit()

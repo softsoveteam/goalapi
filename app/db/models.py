@@ -45,6 +45,7 @@ class Goal(Base):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(32), default="open")
     priority: Mapped[str] = mapped_column(String(20), default="normal")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])

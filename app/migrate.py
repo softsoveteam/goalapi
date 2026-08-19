@@ -17,6 +17,7 @@ EXTRA_COLUMNS = {
     },
     "goals": {
         "priority": "priority VARCHAR(20) DEFAULT 'normal'",
+        "sort_order": "sort_order INTEGER DEFAULT 0",
     },
     "goal_items": {
         "parent_id": "parent_id INTEGER",
@@ -24,9 +25,20 @@ EXTRA_COLUMNS = {
 }
 
 
+def _priority_from_rank(index: int) -> str:
+    if index < 5:
+        return "urgent"
+    if index < 10:
+        return "high"
+    if index < 20:
+        return "normal"
+    return "low"
+
+
 def _add_missing_columns() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
+    added_sort = False
     with engine.begin() as conn:
         for table, columns in EXTRA_COLUMNS.items():
             if table not in tables:
@@ -36,6 +48,15 @@ def _add_missing_columns() -> None:
                 if name not in existing:
                     conn.execute(text("ALTER TABLE {0} ADD COLUMN {1}".format(table, ddl)))
                     print("Added {0}.{1}".format(table, name))
+                    if table == "goals" and name == "sort_order":
+                        added_sort = True
+        if added_sort:
+            rows = conn.execute(text("SELECT id FROM goals ORDER BY id")).fetchall()
+            for index, row in enumerate(rows):
+                conn.execute(
+                    text("UPDATE goals SET sort_order = :s, priority = :p WHERE id = :id"),
+                    {"s": index, "p": _priority_from_rank(index), "id": row[0]},
+                )
 
 
 def migrate() -> None:
