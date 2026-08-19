@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -73,14 +73,30 @@ class ChecklistItemOut(ORMModel):
     title: str
     is_done: bool
     sort_order: int
+    parent_id: Optional[int] = None
+    children: List["ChecklistItemOut"] = Field(default_factory=list)
 
 
 class ChecklistItemCreate(BaseModel):
     title: str = Field(min_length=1, max_length=300)
+    parent_id: Optional[int] = None
 
 
 class ChecklistItemUpdate(BaseModel):
     is_done: bool
+
+
+class GoalLogOut(ORMModel):
+    id: int
+    body: str
+    happened_on: date
+    created_at: datetime
+    created_by: int
+    creator: Optional[UserOut] = None
+
+
+class GoalLogCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
 
 
 class TaskFileOut(ORMModel):
@@ -98,14 +114,17 @@ class GoalOut(ORMModel):
     due_date: Optional[datetime]
     created_by: int
     status: str
+    priority: str = "normal"
     creator: Optional[UserOut] = None
     items: List[ChecklistItemOut] = []
+    logs: List[GoalLogOut] = []
 
 
 class GoalCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     notes: str = ""
     due_date: Optional[datetime] = None
+    priority: str = "normal"
     items: List[str] = []
 
 
@@ -114,6 +133,11 @@ class GoalUpdate(BaseModel):
     notes: Optional[str] = None
     due_date: Optional[datetime] = None
     status: Optional[str] = None
+    priority: Optional[str] = None
+
+
+ChecklistItemOut.model_rebuild()
+GoalOut.model_rebuild()
 
 
 class TaskOut(ORMModel):

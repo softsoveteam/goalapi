@@ -4,29 +4,38 @@ from app.db import models  # noqa: F401
 from app.db.seed import seed_defaults
 from app.db.session import Base, SessionLocal, engine
 
-TASK_COLUMNS = {
-    "priority": "priority VARCHAR(20) DEFAULT 'normal'",
-    "reminded_at": "reminded_at TIMESTAMP",
-    "warned_at": "warned_at TIMESTAMP",
-    "recurring_rule_id": "recurring_rule_id INTEGER",
-    "is_archived": "is_archived BOOLEAN DEFAULT FALSE",
-    "archive_reason": "archive_reason TEXT DEFAULT ''",
-    "archived_at": "archived_at TIMESTAMP",
-    "archived_by": "archived_by INTEGER",
+EXTRA_COLUMNS = {
+    "tasks": {
+        "priority": "priority VARCHAR(20) DEFAULT 'normal'",
+        "reminded_at": "reminded_at TIMESTAMP",
+        "warned_at": "warned_at TIMESTAMP",
+        "recurring_rule_id": "recurring_rule_id INTEGER",
+        "is_archived": "is_archived BOOLEAN DEFAULT FALSE",
+        "archive_reason": "archive_reason TEXT DEFAULT ''",
+        "archived_at": "archived_at TIMESTAMP",
+        "archived_by": "archived_by INTEGER",
+    },
+    "goals": {
+        "priority": "priority VARCHAR(20) DEFAULT 'normal'",
+    },
+    "goal_items": {
+        "parent_id": "parent_id INTEGER",
+    },
 }
 
 
 def _add_missing_columns() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    if "tasks" not in tables:
-        return
-    existing = {col["name"] for col in inspector.get_columns("tasks")}
     with engine.begin() as conn:
-        for name, ddl in TASK_COLUMNS.items():
-            if name not in existing:
-                conn.execute(text("ALTER TABLE tasks ADD COLUMN {0}".format(ddl)))
-                print("Added tasks.{0}".format(name))
+        for table, columns in EXTRA_COLUMNS.items():
+            if table not in tables:
+                continue
+            existing = {col["name"] for col in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name not in existing:
+                    conn.execute(text("ALTER TABLE {0} ADD COLUMN {1}".format(table, ddl)))
+                    print("Added {0}.{1}".format(table, name))
 
 
 def migrate() -> None:

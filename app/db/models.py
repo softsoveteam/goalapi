@@ -44,6 +44,7 @@ class Goal(Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String(32), default="open")
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     creator: Mapped["User"] = relationship(foreign_keys=[created_by])
@@ -52,6 +53,10 @@ class Goal(Base):
         cascade="all, delete-orphan",
         order_by="GoalItem.sort_order",
     )
+    logs: Mapped[List["GoalLog"]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+    )
 
 
 class GoalItem(Base):
@@ -59,11 +64,30 @@ class GoalItem(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("goal_items.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(300))
     is_done: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     goal: Mapped["Goal"] = relationship(back_populates="items")
+
+
+class GoalLog(Base):
+    __tablename__ = "goal_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    happened_on: Mapped[date] = mapped_column(Date, index=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    goal: Mapped["Goal"] = relationship(back_populates="logs")
+    creator: Mapped["User"] = relationship(foreign_keys=[created_by])
 
 
 class Task(Base):
