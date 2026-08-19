@@ -134,28 +134,6 @@ def create_goal(
     return _out(_query(db).filter(Goal.id == goal.id).first())
 
 
-@router.patch("/{goal_id}", response_model=GoalOut)
-def update_goal(
-    goal_id: int,
-    payload: GoalUpdate,
-    db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
-):
-    goal = _query(db).filter(Goal.id == goal_id).first()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    if payload.title is not None:
-        goal.title = payload.title
-    if payload.notes is not None:
-        goal.notes = payload.notes
-    if payload.due_date is not None:
-        goal.due_date = payload.due_date
-    if payload.status is not None:
-        goal.status = payload.status
-    db.commit()
-    return _out(_query(db).filter(Goal.id == goal_id).first())
-
-
 @router.post("/reorder", response_model=list)
 def reorder_goals(
     payload: GoalReorderIn,
@@ -176,6 +154,28 @@ def reorder_goals(
     _apply_ranks(db, ordered)
     db.commit()
     return [_out(goal) for goal in _query(db).order_by(Goal.sort_order, Goal.id).all()]
+
+
+@router.patch("/{goal_id}", response_model=GoalOut)
+def update_goal(
+    goal_id: int,
+    payload: GoalUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    goal = _query(db).filter(Goal.id == goal_id).first()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    if payload.title is not None:
+        goal.title = payload.title
+    if payload.notes is not None:
+        goal.notes = payload.notes
+    if payload.due_date is not None:
+        goal.due_date = payload.due_date
+    if payload.status is not None:
+        goal.status = payload.status
+    db.commit()
+    return _out(_query(db).filter(Goal.id == goal_id).first())
 
 
 @router.post("/{goal_id}/items", response_model=GoalOut)
